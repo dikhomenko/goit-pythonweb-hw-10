@@ -1,17 +1,18 @@
 from sqlalchemy.orm import sessionmaker, Session
 from sqlalchemy import select, extract
-from db.models import Contact, Email, Phone, AdditionalData
-from db.schemas import ContactCreate, AdditionalDataCreate
+from db.models.contact import Contact, Email, Phone, AdditionalData
+from app.routers.contacts.schemas import ContactCreate, AdditionalDataCreate
 from typing import List, Optional
 from datetime import datetime, timedelta
 
 
-def create_contact(db: Session, contact: ContactCreate) -> Contact:
+def create_contact(db: Session, contact: ContactCreate, user_id: int) -> Contact:
     # Convert Pydantic ContactCreate to SQLAlchemy Contact
     db_contact = Contact(
         first_name=contact.first_name,
         last_name=contact.last_name,
         birthday=contact.birthday,
+        user_id=user_id,  # Associate the contact with the authenticated user
         emails=[Email(email=email.email) for email in contact.emails],
         phones=[Phone(phone=phone.phone) for phone in contact.phones],
         additional_data=[
@@ -25,18 +26,36 @@ def create_contact(db: Session, contact: ContactCreate) -> Contact:
     return db_contact
 
 
-def get_contacts(db: Session, skip: int = 0, limit: int = 10) -> List[Contact]:
-    return db.query(Contact).offset(skip).limit(limit).all()
+def get_contacts(
+    db: Session, user_id: int, skip: int = 0, limit: int = 10
+) -> List[Contact]:
+    # Retrieve all contacts for the given user
+    return (
+        db.query(Contact)
+        .filter(Contact.user_id == user_id)
+        .offset(skip)
+        .limit(limit)
+        .all()
+    )
 
 
-def get_contact(db: Session, contact_id: int) -> Optional[Contact]:
-    return db.query(Contact).filter(Contact.id == contact_id).first()
+def get_contact(db: Session, contact_id: int, user_id: int) -> Optional[Contact]:
+    # Retrieve a specific contact by ID for the given user
+    return (
+        db.query(Contact)
+        .filter(Contact.id == contact_id, Contact.user_id == user_id)
+        .first()
+    )
 
 
 def update_contact(
-    db: Session, contact_id: int, contact: ContactCreate
+    db: Session, contact_id: int, contact: ContactCreate, user_id: int
 ) -> Optional[Contact]:
-    db_contact = db.query(Contact).filter(Contact.id == contact_id).first()
+    db_contact = (
+        db.query(Contact)
+        .filter(Contact.id == contact_id, Contact.user_id == user_id)
+        .first()
+    )
     if db_contact:
 
         for key, value in contact.model_dump(exclude_unset=True).items():
@@ -75,8 +94,12 @@ def update_contact(
     return db_contact
 
 
-def delete_contact(db: Session, contact_id: int) -> Optional[Contact]:
-    db_contact = db.query(Contact).filter(Contact.id == contact_id).first()
+def delete_contact(db: Session, contact_id: int, user_id: int) -> Optional[Contact]:
+    db_contact = (
+        db.query(Contact)
+        .filter(Contact.id == contact_id, Contact.user_id == user_id)
+        .first()
+    )
     if db_contact:
         db.delete(db_contact)
         db.commit()
@@ -85,11 +108,12 @@ def delete_contact(db: Session, contact_id: int) -> Optional[Contact]:
 
 def get_contact_by_name_lastname_email(
     db: Session,
+    user_id: int,
     name: Optional[str] = None,
     lastname: Optional[str] = None,
     email: Optional[str] = None,
 ) -> List[Contact]:
-    query = db.query(Contact)
+    query = db.query(Contact).filter(Contact.user_id == user_id)
     if name:
         query = query.filter(Contact.first_name == name)
     if lastname:
@@ -99,7 +123,7 @@ def get_contact_by_name_lastname_email(
     return query.all()
 
 
-def get_contacts_with_upcoming_birthdays(db: Session) -> List[Contact]:
+def get_contacts_with_upcoming_birthdays(db: Session, user_id: int) -> List[Contact]:
     today = datetime.today()
     next_week = today + timedelta(days=7)
 
@@ -110,21 +134,24 @@ def get_contacts_with_upcoming_birthdays(db: Session) -> List[Contact]:
 
     if today_month == next_week_month:
         # If the range is within the same month
-        res = _get_birthdays_same_month(db, today_month, today_day, next_week_day)
+        res = _get_birthdays_same_month(
+            db, user_id, today_month, today_day, next_week_day
+        )
     else:
         # If the range is e.g. March 30 to April 5
         res = _get_birthdays_months_overlap(
-            db, today_month, today_day, next_week_month, next_week_day
+            db, user_id, today_month, today_day, next_week_month, next_week_day
         )
     return res
 
 
 def _get_birthdays_same_month(
-    db: Session, today_month: int, today_day: int, next_week_day: int
+    db: Session, user_id: int, today_month: int, today_day: int, next_week_day: int
 ) -> List[Contact]:
     return (
         db.query(Contact)
         .filter(
+            Contact.user_id == user_id,
             extract("month", Contact.birthday) == today_month,
             extract("day", Contact.birthday).between(today_day, next_week_day),
         )
@@ -134,6 +161,7 @@ def _get_birthdays_same_month(
 
 def _get_birthdays_months_overlap(
     db: Session,
+    user_id: int,
     today_month: int,
     today_day: int,
     next_week_month: int,
@@ -142,10 +170,11 @@ def _get_birthdays_months_overlap(
     return (
         db.query(Contact)
         .filter(
+            Contact.user_id == user_id,
             (extract("month", Contact.birthday) == today_month)
             & (extract("day", Contact.birthday) >= today_day)
             | (extract("month", Contact.birthday) == next_week_month)
-            & (extract("day", Contact.birthday) <= next_week_day)
+            & (extract("day", Contact.birthday) <= next_week_day),
         )
         .all()
     )

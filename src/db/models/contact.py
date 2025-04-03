@@ -1,17 +1,18 @@
 from sqlalchemy import Column, Integer, String, ForeignKey, Date, Text
-from sqlalchemy.orm import relationship, declarative_base
-
-Base = declarative_base()  # Base class for all models
-metadata = Base.metadata  # Metadata object for Alembic
+from sqlalchemy.orm import relationship
+from db.models.base import Base
 
 
 class Contact(Base):
     __tablename__ = "contacts"
 
     id = Column(Integer, primary_key=True, index=True)
-    first_name = Column(String, nullable=False, unique=True)
-    last_name = Column(String, nullable=False, unique=True)
-    birthday = Column(Date, nullable=True, unique=True)
+    first_name = Column(String, nullable=False)
+    last_name = Column(String, nullable=False)
+    birthday = Column(Date, nullable=True)
+    user_id = Column(
+        Integer, ForeignKey("users.id", ondelete="CASCADE"), nullable=False
+    )  # Foreign key to User table
 
     emails = relationship(
         "Email", back_populates="contact", cascade="all, delete-orphan"
@@ -22,6 +23,9 @@ class Contact(Base):
     additional_data = relationship(
         "AdditionalData", back_populates="contact", cascade="all, delete-orphan"
     )
+
+    # Relationship with User
+    user = relationship("User", back_populates="contacts")
 
 
 class Email(Base):
