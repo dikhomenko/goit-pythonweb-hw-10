@@ -1,20 +1,34 @@
 version: '3.8'
 
 services:
-  app:
-    image: dina-app
+  postgres:
+    image: postgres:13
+    container_name: postgres_hw10
+    environment:
+      POSTGRES_USER: ${POSTGRES_USER}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD}
+      POSTGRES_DB: ${POSTGRES_DB}  
+    ports:
+      - "5432:5432"
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+
+  web:
     build:
       context: .
       dockerfile: Dockerfile
+    container_name: fastapi_hw10
+    command: ["poetry", "run", "uvicorn", "src.app.main:app", "--host", "0.0.0.0", "--port", "8000"]
+    environment:
+      DATABASE_URL: postgresql://${POSTGRES_USER}:${POSTGRES_PASSWORD}@postgres:5432/${POSTGRES_DB}
+    volumes:
+      - ./src:/app/src
     ports:
       - "8000:8000"
-    volumes:
-      - ./storage:/app/storage
-  postgres:
-    image: postgres:latest
-    environment:
-      POSTGRES_DB: ${POSTGRES_DB}
-      POSTGRES_USER: ${POSTGRES_USER}
-      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD}
-    volumes:
-      - postgres_data:/var/lib/postgresql/data    
+    depends_on:
+      - postgres
+    env_file:
+      - ./src/.env
+
+volumes:
+  postgres_data:

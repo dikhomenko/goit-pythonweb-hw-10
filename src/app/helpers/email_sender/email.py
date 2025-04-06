@@ -4,8 +4,9 @@ from fastapi_mail import FastMail, MessageSchema, ConnectionConfig, MessageType
 from fastapi_mail.errors import ConnectionErrors
 from pydantic import EmailStr
 
-from app.helpers.auth.jwt_manager import create_email_token
 from app.settings import settings
+from app.services.auth.jwt_manager import JWTManager
+from fastapi import Depends
 
 
 conf = ConnectionConfig(
@@ -23,9 +24,12 @@ conf = ConnectionConfig(
 )
 
 
-async def send_email(email: EmailStr, username: str, host: str):
+async def send_email(
+    email: EmailStr, username: str, host: str, jwt_manager: JWTManager
+):
     try:
-        token_verification = create_email_token({"sub": email})
+        # Use JWTManager to create the email token
+        token_verification = jwt_manager.create_email_token({"sub": email})
         message = MessageSchema(
             subject="Confirm your email",
             recipients=[email],

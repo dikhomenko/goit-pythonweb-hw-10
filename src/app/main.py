@@ -6,13 +6,13 @@ sys.path.append(str(Path(__file__).resolve().parents[1]))
 
 from app.routers.contacts import contacts
 from fastapi import FastAPI, status, Request
-from app.routers import healthchecks
 from app.routers.users import users
 from app.routers.auth import auth
 from app.helpers.api.rate_limiter import limiter, rate_limit_exception_handler
 from slowapi.errors import RateLimitExceeded
 from slowapi.middleware import SlowAPIMiddleware
 from starlette.middleware.cors import CORSMiddleware
+from app.settings import settings
 
 # Init fastapi app
 app = FastAPI()
@@ -25,10 +25,7 @@ app.add_middleware(SlowAPIMiddleware)
 # Add the rate limit exception handler
 app.add_exception_handler(RateLimitExceeded, rate_limit_exception_handler)
 
-origins = [
-    "<http://localhost:3000>",
-    "<http://127.0.0.1/8000>",
-]
+origins = settings.ORIGINS
 
 app.add_middleware(
     CORSMiddleware,
@@ -39,7 +36,6 @@ app.add_middleware(
 )
 
 app.include_router(contacts.router)
-app.include_router(healthchecks.router)
 app.include_router(users.router)
 app.include_router(auth.router)
 
